@@ -1,8 +1,12 @@
+<script>
 // عداد التحميلات - متزامن بين جميع الأجهزة
+const namespace = 'arabic-text-converter-v2';
+const key = 'downloads';
+
 async function incrementDownloadCount() {
     try {
         // زيادة العداد على CountAPI
-        const response = await fetch('https://api.countapi.xyz/hit/arabic-text-converter-v2/downloads');
+        const response = await fetch(`https://api.countapi.xyz/update/${namespace}/${key}?amount=1`);
         const data = await response.json();
         
         // تحديث العدد المعروض
@@ -80,9 +84,17 @@ function uploadFile() {
 document.addEventListener('DOMContentLoaded', async function() {
     try {
         // جلب العدد الحقيقي من CountAPI
-        const response = await fetch('https://api.countapi.xyz/get/arabic-text-converter-v2/downloads');
+        const response = await fetch(`https://api.countapi.xyz/get/${namespace}/${key}`);
         const data = await response.json();
-        document.getElementById('downloadCount').textContent = data.value;
+        
+        // إذا لم يكن المفتاح موجودًا بعد، أنشئه بقيمة 0
+        if (data.status === 404 || data.value === undefined) {
+            await fetch(`https://api.countapi.xyz/create?namespace=${namespace}&key=${key}&value=0`);
+            document.getElementById('downloadCount').textContent = 0;
+        } else {
+            document.getElementById('downloadCount').textContent = data.value;
+        }
+        
         console.log('العداد الحقيقي:', data.value);
     } catch (error) {
         // إذا فشل الاتصال، استخدم localStorage
@@ -99,3 +111,4 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 });
+</script>
