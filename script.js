@@ -2,7 +2,7 @@
 async function incrementDownloadCount() {
     try {
         // زيادة العداد على CountAPI
-        const response = await fetch('https://api.countapi.xyz/hit/arabic-text-converter/downloads');
+        const response = await fetch('https://api.countapi.xyz/hit/arabic-text-converter-v2/downloads');
         const data = await response.json();
         
         // تحديث العدد المعروض
@@ -14,6 +14,7 @@ async function incrementDownloadCount() {
         
     } catch (error) {
         // إذا فشل الاتصال، استخدم localStorage كنسخة احتياطية
+        console.log('استخدام العداد المحلي');
         let count = parseInt(localStorage.getItem('downloadCount')) || 0;
         count++;
         localStorage.setItem('downloadCount', count);
@@ -42,7 +43,6 @@ function checkPassword() {
     const password = document.getElementById('password').value;
     const loginError = document.getElementById('loginError');
     
-    // كلمة المرور الافتراضية - يمكنك تغييرها
     if (password === 'admin123') {
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('uploadSection').style.display = 'block';
@@ -64,7 +64,6 @@ function uploadFile() {
     const fileName = fileInput.files[0].name;
     const fileSize = (fileInput.files[0].size / 1024 / 1024).toFixed(2);
     
-    // محاكاة عملية الرفع
     uploadStatus.innerHTML = '<p>جاري رفع الملف...</p>';
     
     setTimeout(() => {
@@ -77,15 +76,17 @@ function uploadFile() {
     }, 2000);
 }
 
-// تهيئة الصفحة
+// تهيئة الصفحة - جلب العدد الحقيقي من الخادم
 document.addEventListener('DOMContentLoaded', async function() {
     try {
         // جلب العدد الحقيقي من CountAPI
-        const response = await fetch('https://api.countapi.xyz/get/arabic-text-converter/downloads');
+        const response = await fetch('https://api.countapi.xyz/get/arabic-text-converter-v2/downloads');
         const data = await response.json();
         document.getElementById('downloadCount').textContent = data.value;
+        console.log('العداد الحقيقي:', data.value);
     } catch (error) {
         // إذا فشل الاتصال، استخدم localStorage
+        console.log('استخدام العداد المحلي');
         const count = parseInt(localStorage.getItem('downloadCount')) || 0;
         document.getElementById('downloadCount').textContent = count;
     }
