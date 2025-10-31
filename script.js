@@ -1,24 +1,40 @@
+// إعدادات العداد
+const COUNTER_CONFIG = {
+    namespace: 'arabic-text-converter',
+    key: 'downloads',
+    fallbackKey: 'localDownloadCount'
+};
+
 // عداد التحميلات - متزامن بين جميع الأجهزة
 async function incrementDownloadCount() {
     try {
-        // استخدام namespace و key ثابتين
-        const response = await fetch('https://api.countapi.xyz/hit/arabic-converter-30bit/download-count');
-        const data = await response.json();
+        // المحاولة الأولى: استخدام APIcounter
+        let count;
+        try {
+            const response = await fetch(`https://apicounter.com/count/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}/increment`);
+            const data = await response.json();
+            count = data.count;
+        } catch (apiError) {
+            // المحاولة الثانية: استخدام CountAPI كبديل
+            const response = await fetch(`https://api.countapi.xyz/hit/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`);
+            const data = await response.json();
+            count = data.value;
+        }
         
         // تحديث العدد المعروض
-        document.getElementById('downloadCount').textContent = data.value;
+        document.getElementById('downloadCount').textContent = count;
         
         setTimeout(() => {
             alert('جاري تحميل البرنامج... قد تظهر نافذة تحميل من Google Drive');
         }, 500);
         
     } catch (error) {
-        // إذا فشل الاتصال، استخدم localStorage كنسخة احتياطية
+        // إذا فشلت جميع المحاولات، استخدم localStorage
         console.log('استخدام العداد المحلي');
-        let count = parseInt(localStorage.getItem('downloadCount')) || 0;
-        count++;
-        localStorage.setItem('downloadCount', count);
-        document.getElementById('downloadCount').textContent = count;
+        let localCount = parseInt(localStorage.getItem(COUNTER_CONFIG.fallbackKey)) || 0;
+        localCount++;
+        localStorage.setItem(COUNTER_CONFIG.fallbackKey, localCount);
+        document.getElementById('downloadCount').textContent = localCount;
     }
 }
 
@@ -29,7 +45,6 @@ function showUploadModal() {
 
 function closeUploadModal() {
     document.getElementById('uploadModal').style.display = 'none';
-    // إعادة تعيين النافذة عند الإغلاق
     document.getElementById('loginSection').style.display = 'block';
     document.getElementById('uploadSection').style.display = 'none';
     document.getElementById('password').value = '';
@@ -76,32 +91,29 @@ function uploadFile() {
     }, 2000);
 }
 
-// تهيئة الصفحة - مع حل مشكلة القيمة الابتدائية
+// تهيئة الصفحة - جلب العدد الحقيقي
 document.addEventListener('DOMContentLoaded', async function() {
     try {
-        // محاولة جلب العدد من CountAPI
-        const response = await fetch('https://api.countapi.xyz/get/arabic-converter-30bit/download-count');
-        const data = await response.json();
-        
-        if (data.value === 0) {
-            // إذا كان العدد 0، نتحقق من localStorage ونضبط القيمة الأولية
-            const localCount = parseInt(localStorage.getItem('downloadCount')) || 0;
-            if (localCount > 0) {
-                // إذا كان هناك تحميلات سابقة في localStorage، نضبط CountAPI
-                await fetch(`https://api.countapi.xyz/set/arabic-converter-30bit/download-count?value=${localCount}`);
-                document.getElementById('downloadCount').textContent = localCount;
-            } else {
-                document.getElementById('downloadCount').textContent = 0;
-            }
-        } else {
-            document.getElementById('downloadCount').textContent = data.value;
+        // محاولة جلب العدد من APIcounter
+        let count;
+        try {
+            const response = await fetch(`https://apicounter.com/count/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`);
+            const data = await response.json();
+            count = data.count;
+        } catch (apiError) {
+            // محاولة جلب العدد من CountAPI
+            const response = await fetch(`https://api.countapi.xyz/get/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`);
+            const data = await response.json();
+            count = data.value;
         }
+        
+        document.getElementById('downloadCount').textContent = count;
         
     } catch (error) {
         // إذا فشل الاتصال، استخدم localStorage
         console.log('استخدام العداد المحلي');
-        const count = parseInt(localStorage.getItem('downloadCount')) || 0;
-        document.getElementById('downloadCount').textContent = count;
+        const localCount = parseInt(localStorage.getItem(COUNTER_CONFIG.fallbackKey)) || 0;
+        document.getElementById('downloadCount').textContent = localCount;
     }
     
     // إغلاق النافذة عند النقر خارجها
@@ -113,18 +125,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 });
 
-// دالة مساعدة لتهيئة CountAPI بقيمة أولية (يمكن تشغيلها مرة واحدة)
-async function initializeCounter() {
+// دالة لتهيئة العداد يدوياً (تشغيلها مرة واحدة من console)
+async function initializeCounter(initialValue = 0) {
     try {
-        const localCount = parseInt(localStorage.getItem('downloadCount')) || 0;
+        // نقل التحميلات المحلية إلى السيرفر
+        const localCount = parseInt(localStorage.getItem(COUNTER_CONFIG.fallbackKey)) || initialValue;
+        
         if (localCount > 0) {
-            await fetch(`https://api.countapi.xyz/set/arabic-converter-30bit/download-count?value=${localCount}`);
+            await fetch(`https://apicounter.com/count/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}/set?value=${localCount}`);
             console.log('تم تهيئة العداد بالقيمة:', localCount);
         }
     } catch (error) {
         console.log('فشل في تهيئة العداد');
     }
 }
-
-// تشغيل التهيئة مرة واحدة (اختياري)
-// initializeCounter();
