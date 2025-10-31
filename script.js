@@ -1,40 +1,56 @@
-// إعدادات العداد
+// إعدادات العداد - استخدام خدمة موثوقة
 const COUNTER_CONFIG = {
-    namespace: 'arabic-text-converter',
-    key: 'downloads',
+    namespace: 'arabic-converter-30bit',
+    key: 'total-downloads',
     fallbackKey: 'localDownloadCount'
 };
+
+// دالة مساعدة للاتصال بالعداد
+async function fetchCounter(action = 'get') {
+    try {
+        const baseURL = 'https://api.countapi.xyz';
+        const url = action === 'hit' 
+            ? `${baseURL}/hit/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`
+            : `${baseURL}/get/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`;
+        
+        console.log(`جاري ${action === 'hit' ? 'زيادة' : 'جلب'} العداد...`);
+        const response = await fetch(url);
+        
+        if (!response.ok) throw new Error('فشل في الاتصال');
+        
+        const data = await response.json();
+        return data.value;
+    } catch (error) {
+        console.log('فشل الاتصال بالعداد:', error);
+        throw error;
+    }
+}
 
 // عداد التحميلات - متزامن بين جميع الأجهزة
 async function incrementDownloadCount() {
     try {
-        // المحاولة الأولى: استخدام APIcounter
-        let count;
-        try {
-            const response = await fetch(`https://apicounter.com/count/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}/increment`);
-            const data = await response.json();
-            count = data.count;
-        } catch (apiError) {
-            // المحاولة الثانية: استخدام CountAPI كبديل
-            const response = await fetch(`https://api.countapi.xyz/hit/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`);
-            const data = await response.json();
-            count = data.value;
-        }
+        // زيادة العداد على الخادم
+        const count = await fetchCounter('hit');
         
         // تحديث العدد المعروض
         document.getElementById('downloadCount').textContent = count;
+        console.log('تم تحديث العداد إلى:', count);
         
         setTimeout(() => {
             alert('جاري تحميل البرنامج... قد تظهر نافذة تحميل من Google Drive');
         }, 500);
         
     } catch (error) {
-        // إذا فشلت جميع المحاولات، استخدم localStorage
+        // إذا فشل الاتصال، استخدم localStorage
         console.log('استخدام العداد المحلي');
         let localCount = parseInt(localStorage.getItem(COUNTER_CONFIG.fallbackKey)) || 0;
         localCount++;
         localStorage.setItem(COUNTER_CONFIG.fallbackKey, localCount);
         document.getElementById('downloadCount').textContent = localCount;
+        
+        setTimeout(() => {
+            alert('جاري تحميل البرنامج...');
+        }, 500);
     }
 }
 
@@ -94,24 +110,14 @@ function uploadFile() {
 // تهيئة الصفحة - جلب العدد الحقيقي
 document.addEventListener('DOMContentLoaded', async function() {
     try {
-        // محاولة جلب العدد من APIcounter
-        let count;
-        try {
-            const response = await fetch(`https://apicounter.com/count/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`);
-            const data = await response.json();
-            count = data.count;
-        } catch (apiError) {
-            // محاولة جلب العدد من CountAPI
-            const response = await fetch(`https://api.countapi.xyz/get/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`);
-            const data = await response.json();
-            count = data.value;
-        }
-        
+        // جلب العدد من الخادم
+        const count = await fetchCounter('get');
         document.getElementById('downloadCount').textContent = count;
+        console.log('تم جلب العدد من الخادم:', count);
         
     } catch (error) {
         // إذا فشل الاتصال، استخدم localStorage
-        console.log('استخدام العداد المحلي');
+        console.log('استخدام العداد المحلي للعرض');
         const localCount = parseInt(localStorage.getItem(COUNTER_CONFIG.fallbackKey)) || 0;
         document.getElementById('downloadCount').textContent = localCount;
     }
@@ -126,16 +132,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 // دالة لتهيئة العداد يدوياً (تشغيلها مرة واحدة من console)
-async function initializeCounter(initialValue = 0) {
-    try {
-        // نقل التحميلات المحلية إلى السيرفر
-        const localCount = parseInt(localStorage.getItem(COUNTER_CONFIG.fallbackKey)) || initialValue;
-        
-        if (localCount > 0) {
-            await fetch(`https://apicounter.com/count/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}/set?value=${localCount}`);
-            console.log('تم تهيئة العداد بالقيمة:', localCount);
-        }
-    } catch (error) {
-        console.log('فشل في تهيئة العداد');
+function initializeCounterManually() {
+    const localCount = parseInt(localStorage.getItem('localDownloadCount')) || 0;
+    if (localCount > 0) {
+        // نقل التحميلات المحلية إلى الخادم
+        fetch(`https://api.countapi.xyz/set/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}?value=${localCount}`)
+            .then(() => console.log('تم تهيئة العداد بالقيمة:', localCount))
+            .catch(err => console.log('فشل في التهيئة:', err));
     }
 }
