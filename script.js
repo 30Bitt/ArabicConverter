@@ -1,6 +1,6 @@
 // script.js - كامل وجاهز للصق
 // استبدل الرابط بالرابط الناتج عند نشر Google Apps Script (Web app)
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw-WM0REX52kdKjLu2NyYqSGfbF8jQDL5jVJahCWd1YxC7l3zHvQVk0LgKAf3a-mZyK/exec';
 
 // --- دالة تسجيل التحميل (تدعم fetch keepalive و sendBeacon كـ fallback) ---
 async function trackDownload() {
@@ -223,3 +223,4 @@ document.addEventListener('DOMContentLoaded', async function() {
         updateDownloadCountUI(localCount);
     }
 });
+
