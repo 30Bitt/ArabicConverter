@@ -1,60 +1,60 @@
-// إعدادات العداد - استخدام خدمة موثوقة
-const COUNTER_CONFIG = {
-    namespace: 'arabic-converter-30bit',
-    key: 'total-downloads',
-    fallbackKey: 'localDownloadCount'
-};
+// إعدادات Google Apps Script
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydvR7Qmw2mkpiRYDzcpoJflgamG1RH39ILJ0NW7NngbsnXCke1qyKL0gfDym5q_-fp/exec';
 
-// دالة مساعدة للاتصال بالعداد
-async function fetchCounter(action = 'get') {
+// دالة مساعدة لتسجيل التحميل
+async function trackDownload() {
     try {
-        const baseURL = 'https://api.countapi.xyz';
-        const url = action === 'hit' 
-            ? `${baseURL}/hit/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`
-            : `${baseURL}/get/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}`;
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'download',
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                timestamp: new Date().toISOString()
+            })
+        });
         
-        console.log(`جاري ${action === 'hit' ? 'زيادة' : 'جلب'} العداد...`);
-        const response = await fetch(url);
-        
-        if (!response.ok) throw new Error('فشل في الاتصال');
-        
-        const data = await response.json();
-        return data.value;
+        const result = await response.json();
+        return result.count;
     } catch (error) {
-        console.log('فشل الاتصال بالعداد:', error);
-        throw error;
-    }
-}
-
-// عداد التحميلات - متزامن بين جميع الأجهزة
-async function incrementDownloadCount() {
-    try {
-        // زيادة العداد على الخادم
-        const count = await fetchCounter('hit');
-        
-        // تحديث العدد المعروض
-        document.getElementById('downloadCount').textContent = count;
-        console.log('تم تحديث العداد إلى:', count);
-        
-        setTimeout(() => {
-            alert('جاري تحميل البرنامج... قد تظهر نافذة تحميل من Google Drive');
-        }, 500);
-        
-    } catch (error) {
-        // إذا فشل الاتصال، استخدم localStorage
         console.log('استخدام العداد المحلي');
-        let localCount = parseInt(localStorage.getItem(COUNTER_CONFIG.fallbackKey)) || 0;
-        localCount++;
-        localStorage.setItem(COUNTER_CONFIG.fallbackKey, localCount);
-        document.getElementById('downloadCount').textContent = localCount;
-        
-        setTimeout(() => {
-            alert('جاري تحميل البرنامج...');
-        }, 500);
+        return null;
     }
 }
 
-// إدارة النافذة المنبثقة
+// دالة جلب العدد الحالي
+async function getDownloadCount() {
+    try {
+        const response = await fetch(GOOGLE_SCRIPT_URL);
+        const result = await response.json();
+        return result.count;
+    } catch (error) {
+        return null;
+    }
+}
+
+// عداد التحميلات الرئيسي
+async function incrementDownloadCount() {
+    const newCount = await trackDownload();
+    
+    if (newCount !== null) {
+        document.getElementById('downloadCount').textContent = newCount;
+    } else {
+        let localCount = parseInt(localStorage.getItem('downloadCount')) || 0;
+        localCount++;
+        localStorage.setItem('downloadCount', localCount);
+        document.getElementById('downloadCount').textContent = localCount;
+    }
+    
+    setTimeout(() => {
+        alert('جاري تحميل البرنامج...');
+    }, 500);
+}
+
+// باقي الدوال كما هي...
 function showUploadModal() {
     document.getElementById('uploadModal').style.display = 'block';
 }
@@ -69,7 +69,6 @@ function closeUploadModal() {
     document.getElementById('fileInput').value = '';
 }
 
-// دوال تسجيل الدخول والرفع
 function checkPassword() {
     const password = document.getElementById('password').value;
     const loginError = document.getElementById('loginError');
@@ -107,22 +106,16 @@ function uploadFile() {
     }, 2000);
 }
 
-// تهيئة الصفحة - جلب العدد الحقيقي
+// تهيئة الصفحة
 document.addEventListener('DOMContentLoaded', async function() {
-    try {
-        // جلب العدد من الخادم
-        const count = await fetchCounter('get');
-        document.getElementById('downloadCount').textContent = count;
-        console.log('تم جلب العدد من الخادم:', count);
-        
-    } catch (error) {
-        // إذا فشل الاتصال، استخدم localStorage
-        console.log('استخدام العداد المحلي للعرض');
-        const localCount = parseInt(localStorage.getItem(COUNTER_CONFIG.fallbackKey)) || 0;
+    const currentCount = await getDownloadCount();
+    if (currentCount !== null) {
+        document.getElementById('downloadCount').textContent = currentCount;
+    } else {
+        const localCount = parseInt(localStorage.getItem('downloadCount')) || 0;
         document.getElementById('downloadCount').textContent = localCount;
     }
     
-    // إغلاق النافذة عند النقر خارجها
     window.addEventListener('click', function(event) {
         const modal = document.getElementById('uploadModal');
         if (event.target === modal) {
@@ -130,14 +123,3 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 });
-
-// دالة لتهيئة العداد يدوياً (تشغيلها مرة واحدة من console)
-function initializeCounterManually() {
-    const localCount = parseInt(localStorage.getItem('localDownloadCount')) || 0;
-    if (localCount > 0) {
-        // نقل التحميلات المحلية إلى الخادم
-        fetch(`https://api.countapi.xyz/set/${COUNTER_CONFIG.namespace}/${COUNTER_CONFIG.key}?value=${localCount}`)
-            .then(() => console.log('تم تهيئة العداد بالقيمة:', localCount))
-            .catch(err => console.log('فشل في التهيئة:', err));
-    }
-}
