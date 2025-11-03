@@ -1,59 +1,52 @@
-// script.js - كامل وجاهز للصق
+// script.js - كود كامل وجاهز للنسخ واللصق
 // استبدل الرابط بالرابط الناتج عند نشر Google Apps Script (Web app)
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxZIPwr8Ja6Qx3aN6Zw67exQMXW6UW2Li72jFVX-t47TUoYe0pmJLZRh1tYwPdaf9uJ/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxVbII3IRqg1DWcM3SNHkcNafMjMG_uHWHjmAiTudIxsSw6ByMjssLykAiVXsi8k5P1/exec';
 
-// --- دالة تسجيل التحميل (تدعم fetch keepalive و sendBeacon كـ fallback) ---
+// --- دالة تسجيل التحميل ---
 async function trackDownload() {
     try {
-        // البيانات التي نرسلها للسيرفر
-        const payload = {
-            action: 'download',
-            userAgent: navigator.userAgent || 'Unknown',
-            platform: navigator.platform || 'Unknown',
-            timestamp: new Date().toISOString()
-        };
+        const formData = new URLSearchParams();
+        formData.append('action', 'download');
+        formData.append('userAgent', navigator.userAgent || 'Unknown');
+        formData.append('platform', navigator.platform || 'Unknown');
+        formData.append('timestamp', new Date().toISOString());
 
-        // نجرب أولاً استخدام fetch مع خيار keepalive للسماح للإرسال أثناء التنقل
-        try {
-            const formData = new URLSearchParams();
-            for (const k in payload) formData.append(k, payload[k]);
-
-            // use keepalive so the POST can complete even if navigation starts
-            const resp = await fetch(GOOGLE_SCRIPT_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-                },
-                body: formData.toString(),
-                keepalive: true, // يساعد على الإرسال أثناء التنقل
-                cache: 'no-store'
+        // استخدام sendBeacon أولاً لأنه أسرع ولا ينتظر رد
+        if (navigator.sendBeacon) {
+            const blob = new Blob([formData.toString()], { 
+                type: 'application/x-www-form-urlencoded' 
             });
-
-            // محاولة قراءة النتيجة (قد لا تنجح دائماً إذا كانت navigation تسبق الإكمال)
-            if (resp && resp.ok) {
-                const result = await resp.json();
-                return result.count ?? null;
-            }
-        } catch (errFetch) {
-            // لو حدث خطأ عند fetch، نجرب sendBeacon (عادي للـ POST الخفيف)
-            if (navigator && navigator.sendBeacon) {
-                try {
-                    const params = new URLSearchParams();
-                    for (const k in payload) params.append(k, payload[k]);
-                    const blob = new Blob([params.toString()], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
-                    navigator.sendBeacon(GOOGLE_SCRIPT_URL, blob);
-                    // sendBeacon لا يعيد نتيجة، لذا نرجع null لكي يستخدم العداد المحلي أو يتم تحديث لاحقاً بجلب getDownloadCount()
-                    return null;
-                } catch (beErr) {
-                    console.error('sendBeacon failed', beErr);
-                }
-            }
-            console.warn('fetch failed in trackDownload:', errFetch);
+            navigator.sendBeacon(GOOGLE_SCRIPT_URL, blob);
         }
 
+        // محاولة fetch في الخلفية للحصول على العدد الحقيقي
+        setTimeout(async () => {
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData.toString()
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    // تحديث العداد بالعدد الحقيقي إذا اكتمل
+                    if (result.count && !isNaN(result.count)) {
+                        updateDownloadCountUI(result.count);
+                        localStorage.setItem('downloadCount', String(result.count));
+                    }
+                }
+            } catch (error) {
+                console.log('التحديث في الخلفية فشل، لكن العداد زاد محلياً');
+            }
+        }, 500);
+
         return null;
-    } catch (err) {
-        console.error('trackDownload error:', err);
+
+    } catch (error) {
+        console.error('Error in trackDownload:', error);
         return null;
     }
 }
@@ -61,7 +54,10 @@ async function trackDownload() {
 // --- دالة لجلب العدد الحالي من السيرفر ---
 async function getDownloadCount() {
     try {
-        const resp = await fetch(GOOGLE_SCRIPT_URL + '?_=' + Date.now(), { cache: 'no-store' });
+        const resp = await fetch(GOOGLE_SCRIPT_URL + '?_=' + Date.now(), { 
+            cache: 'no-store',
+            method: 'GET'
+        });
         if (!resp.ok) throw new Error('Server response not OK');
         const data = await resp.json();
         return data.count ?? null;
@@ -72,35 +68,40 @@ async function getDownloadCount() {
 }
 
 // --- زيادة العداد عند الضغط على زر التحميل ---
-let downloadInProgress = false; // لتجنب نقرات متكررة سريعة
-async function incrementDownloadCount() {
+let downloadInProgress = false;
+async function incrementDownloadCount(event) {
     if (downloadInProgress) return;
     downloadInProgress = true;
 
-    // نحاول تسجيل التحميل على السيرفر
-    const newCount = await trackDownload();
-
-    if (newCount !== null && !isNaN(newCount)) {
-        // تحديث العنصر مباشرة بعد استجابة السيرفر
-        updateDownloadCountUI(newCount);
-        // خزّن نسخة محلية متزامنة
-        localStorage.setItem('downloadCount', String(newCount));
-    } else {
-        // fallback: زيادة العداد محلياً إذا لم نتمكن من الحصول على نتيجة من السيرفر
-        let localCount = parseInt(localStorage.getItem('downloadCount')) || 0;
-        localCount++;
-        localStorage.setItem('downloadCount', localCount);
-        updateDownloadCountUI(localCount);
+    // منع السلوك الافتراضي للرابط
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
     }
 
-    // تأثير بصري بسيط عند التغيير
+    // زيادة العداد فورياً قبل الانتظار
+    let currentCount = parseInt(document.getElementById('downloadCount').textContent) || 0;
+    currentCount++;
+    updateDownloadCountUI(currentCount);
     flashCount();
 
-    // تأخير قصير قبل إعادة السماح بالنقر مرة أخرى
-    setTimeout(() => downloadInProgress = false, 1000);
+    // محاولة تسجيل التحميل في الخلفية
+    const newCount = await trackDownload();
+    
+    if (newCount !== null && !isNaN(newCount)) {
+        // إذا حصلنا على العدد الحقيقي، نستخدمه
+        updateDownloadCountUI(newCount);
+        localStorage.setItem('downloadCount', String(newCount));
+    } else {
+        // إذا فشل الاتصال، نستخدم العدد المحلي
+        localStorage.setItem('downloadCount', String(currentCount));
+    }
 
-    // ملاحظة: إذا أردت فتح التنزيل عبر الجافاسكربت بدلاً من reliance على الرابط <a>,
-    // يمكن هنا تنفيذ نافذة تحميل مباشرة. حاليًا الرابط في HTML سيتولى التنزيل.
+    // الانتقال للتحميل بعد نصف ثانية
+    setTimeout(() => {
+        window.location.href = 'https://drive.google.com/uc?export=download&id=1N9xaXBc_vrDQwag0KD78VUgPU5XXfNLL';
+        downloadInProgress = false;
+    }, 500);
 }
 
 // --- تحديث واجهة المستخدم لعرض العدد ---
@@ -114,12 +115,18 @@ function updateDownloadCountUI(count) {
 function flashCount() {
     const el = document.getElementById('downloadCount');
     if (!el) return;
+    el.style.transform = 'scale(1.2)';
+    setTimeout(() => {
+        el.style.transform = 'scale(1)';
+    }, 300);
+    
+    // تأثير إضافي مع الأنيميشن
     el.animate([
-        { transform: 'scale(1)', opacity: 1 },
-        { transform: 'scale(1.25)', opacity: 1 },
-        { transform: 'scale(1)', opacity: 1 }
+        { transform: 'scale(1)', color: '#ffffff' },
+        { transform: 'scale(1.3)', color: '#4CAF50' },
+        { transform: 'scale(1)', color: '#ffffff' }
     ], {
-        duration: 400,
+        duration: 500,
         easing: 'ease-out'
     });
 }
@@ -177,7 +184,7 @@ function uploadFile() {
 
     if (uploadStatus) uploadStatus.innerHTML = '<p>جاري رفع الملف...</p>';
 
-    // محاكاة رفع (بما أن الرفع الفعلي لم يٌطلب ربطه بسيرفر)
+    // محاكاة رفع
     setTimeout(() => {
         if (uploadStatus) {
             uploadStatus.innerHTML = `
@@ -212,17 +219,32 @@ window.addEventListener('click', function(event) {
 
 // ----------------- تهيئة الصفحة عند التحميل -----------------
 document.addEventListener('DOMContentLoaded', async function() {
-    // جلب العدد من السيرفر ومحاولة التحديث
-    const currentCount = await getDownloadCount();
-    if (currentCount !== null && !isNaN(currentCount)) {
-        updateDownloadCountUI(currentCount);
-        localStorage.setItem('downloadCount', String(currentCount));
-    } else {
-        // fallback إلى العداد المحلي
-        const localCount = parseInt(localStorage.getItem('downloadCount')) || 0;
-        updateDownloadCountUI(localCount);
-    }
+    // الأولوية للعداد المحلي للحصول على استجابة فورية
+    const localCount = parseInt(localStorage.getItem('downloadCount')) || 0;
+    updateDownloadCountUI(localCount);
+    
+    // جلب العدد الحقيقي من السيرفر في الخلفية
+    setTimeout(async () => {
+        const currentCount = await getDownloadCount();
+        if (currentCount !== null && !isNaN(currentCount)) {
+            updateDownloadCountUI(currentCount);
+            localStorage.setItem('downloadCount', String(currentCount));
+        }
+    }, 1000);
 });
 
-
-
+// إضافة تأثير عند التمرير فوق زر التحميل
+document.addEventListener('DOMContentLoaded', function() {
+    const downloadBtn = document.querySelector('.download-btn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('mouseover', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 8px 25px rgba(76, 175, 80, 0.3)';
+        });
+        
+        downloadBtn.addEventListener('mouseout', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 4px 15px rgba(76, 175, 80, 0.2)';
+        });
+    }
+});
