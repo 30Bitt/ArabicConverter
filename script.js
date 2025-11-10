@@ -1,6 +1,11 @@
 // script.js - كود معدل ومتوافق مع GitHub
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyl0NBca1zZHL5ofCnXLH68Jfer4OrYIc_cCncQywrs9byrpQuI3KEI6sgFr0BZCYLj/exec';
 
+// ✅ دالة فتح فيديو اليوتيوب المضافة
+function openYouTubeVideo() {
+    window.open('https://youtu.be/mDN9Z8NDYDk', '_blank');
+}
+
 let downloadInProgress = false;
 
 // دالة زيادة العداد
